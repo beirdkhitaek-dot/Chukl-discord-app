@@ -6,8 +6,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
@@ -23,6 +25,8 @@ class MainActivity : Activity() {
     private lateinit var gameText: TextView
     private lateinit var usageButton: Button
     private lateinit var loginButton: Button
+    private lateinit var batteryText: TextView
+    private lateinit var batteryButton: Button
 
     private val refresh = object : Runnable {
         override fun run() {
@@ -95,6 +99,23 @@ class MainActivity : Activity() {
         }
         root.addView(loginButton)
 
+        root.addView(label("Step 3: Keep it running", 18f))
+        batteryText = label("", 14f, Color.LTGRAY)
+        root.addView(batteryText)
+        batteryButton = Button(this).apply {
+            text = "Don't let Android stop this app"
+            setOnClickListener {
+                @Suppress("BatteryLife")
+                startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+        }
+        root.addView(batteryButton)
+
         root.addView(label("Minecraft", 18f))
         gameText = label("", 14f, Color.LTGRAY)
         root.addView(gameText)
@@ -122,6 +143,12 @@ class MainActivity : Activity() {
             else -> Native.message().ifEmpty { "Not signed in." }
         }
         loginButton.isEnabled = state == "SIGNED_OUT" || state == "ERROR"
+
+        val unrestricted = getSystemService(PowerManager::class.java)
+            .isIgnoringBatteryOptimizations(packageName)
+        batteryText.text = if (unrestricted) "Done" else
+            "Recommended, so Android doesn't close the app while Minecraft is running."
+        batteryButton.isEnabled = !unrestricted
 
         gameText.text = when {
             !hasUsage -> "Waiting for usage access."

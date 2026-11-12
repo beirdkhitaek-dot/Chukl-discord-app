@@ -123,8 +123,12 @@ JNIEXPORT void JNICALL Java_com_chukl_discord_Native_init(JNIEnv* env, jclass, j
                     setState("ERROR", "Discord connection problem: " +
                                           discordpp::Client::ErrorToString(error));
                 } else if (status == discordpp::Client::Status::Connecting ||
-                           status == discordpp::Client::Status::Connected) {
+                           status == discordpp::Client::Status::Connected ||
+                           status == discordpp::Client::Status::Reconnecting) {
                     setState("CONNECTING");
+                } else if (status == discordpp::Client::Status::Disconnected &&
+                           g_state == "READY") {
+                    setState("ERROR", "Connection to Discord was lost. Retrying...");
                 }
             }
         });
@@ -172,9 +176,10 @@ JNIEXPORT void JNICALL Java_com_chukl_discord_Native_loginWithRefresh(JNIEnv* en
                               std::string newRefresh, discordpp::AuthorizationTokenType, int32_t,
                               std::string) {
                                if (!r.Successful()) {
-                                   // Saved login no longer works: ask the user to sign in again.
-                                   g_pendingTokens = "EXPIRED";
-                                   setState("SIGNED_OUT", "Please sign in to Discord again.");
+                                   // Could be a network problem (school wifi): keep the saved
+                                   // login and let the app retry. Sign in again if it persists.
+                                   setState("ERROR", "Can't reach Discord. Retrying... (" +
+                                                         r.Error() + ")");
                                    return;
                                }
                                onTokens(r, access, newRefresh);

@@ -24,10 +24,11 @@ class PresenceService : Service() {
     private var playing = false
     private var tickCount = 0
     private var triedSavedLogin = false
+    private var lastRetry = 0L
 
     companion object {
         /** Keep the status for this long after Zalith leaves the screen. */
-        const val GRACE_MS = 30_000L
+        const val GRACE_MS = 5 * 60_000L
         private const val POLL_EVERY_TICKS = 8 // 8 x 250 ms = 2 seconds
 
         @Volatile var zalithInFront = false
@@ -97,9 +98,16 @@ class PresenceService : Service() {
             store.refreshToken = tokens.substringAfter('\n')
         }
 
-        if (++tickCount % POLL_EVERY_TICKS != 0) return
-
         val now = System.currentTimeMillis()
+
+        // Lost connection (for example school wifi dropping): try again every 30 seconds.
+        if (Native.state() == "ERROR" && now - lastRetry > 30_000L) {
+            val saved = store.refreshToken
+            lastRetry = now
+            if (saved != null) Native.loginWithRefresh(saved)
+        }
+
+        if (++tickCount % POLL_EVERY_TICKS != 0) return
         if (ZalithWatcher.hasAccess(this)) {
             if (watcher == null) watcher = ZalithWatcher(this)
             zalithInFront = ZalithWatcher.isZalith(watcher?.poll())
