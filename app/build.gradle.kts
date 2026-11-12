@@ -3,8 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val appVersionName = "1.0.1"
-val appVersionCode = 2
+val appVersionName = "1.0.2"
+val appVersionCode = 3
 
 android {
     namespace = "com.chukl.discord"
