@@ -1,0 +1,8 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.cxx/
+app/libs/*.aar
+app/src/main/cpp/discord/

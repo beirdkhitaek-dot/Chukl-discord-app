@@ -1,0 +1,72 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Download the Discord Social SDK from the Sdk release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p sdk_dl
+          gh release download Sdk --pattern 'DiscordSocialSdk-*.zip' --dir sdk_dl
+          ls -la sdk_dl
+
+      - name: Unpack SDK files the build needs
+        run: |
+          cd sdk_dl
+          unzip -q -o DiscordSocialSdk-*.zip \
+            'discord_social_sdk/include/*' \
+            'discord_social_sdk/lib/release/discord_partner_sdk.aar'
+          cd ..
+          mkdir -p app/libs app/src/main/cpp/discord/include app/src/main/cpp/discord/lib/arm64-v8a
+          cp sdk_dl/discord_social_sdk/lib/release/discord_partner_sdk.aar app/libs/
+          cp sdk_dl/discord_social_sdk/include/*.h app/src/main/cpp/discord/include/
+          mkdir -p aar_x && cd aar_x
+          unzip -q -o ../app/libs/discord_partner_sdk.aar 'jni/arm64-v8a/*'
+          cp jni/arm64-v8a/libdiscord_partner_sdk.so ../app/src/main/cpp/discord/lib/arm64-v8a/
+          cd ..
+          ls -la app/libs app/src/main/cpp/discord/include app/src/main/cpp/discord/lib/arm64-v8a
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Name the APK with its version
+        id: apk
+        run: |
+          VERSION=$(grep -oP 'appVersionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk "out/ChuklDiscord-${VERSION}.apk"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChuklDiscord-${{ steps.apk.outputs.version }}
+          path: out/ChuklDiscord-${{ steps.apk.outputs.version }}.apk
+          if-no-files-found: error
